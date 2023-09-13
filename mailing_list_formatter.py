@@ -17,6 +17,9 @@ filename = sys.argv[1]
 headers = []
 dataTypes = []
 inserted = []
+success = 0
+errors = 0
+duplicate = 0
 
 for i in range(2, len(sys.argv)):
 	arg = sys.argv[i].split("=")
@@ -35,31 +38,52 @@ if not (os.path.isfile(filename)):
 excel = openpyxl.load_workbook(filename)
 sheet = excel.active
 
-file = open(filename.split(".")[0] + '.csv', 'w', newline = '', encoding = 'UTF8')
-writer = csv.writer(file, delimiter = ";")
-writer.writerow(headers)
+exported_file = open(filename.split(".")[0] + ".csv", "w", newline = "", encoding = "UTF8")
+errors_file =  open(filename.split(".")[0] + "_errors.csv", "w", newline = "", encoding = "UTF8")
+exported_writer = csv.writer(exported_file, delimiter = ";")
+errors_writer = csv.writer(errors_file, delimiter = ";")
+exported_writer.writerow(headers)
 
 for r in range(2, sheet.max_row + 1):
 	tmp = [None] * len(headers)
+	err = [None] * int(len(headers) + 1)
 	for index, column in enumerate(headers):
 		if (dataTypes[index] == "text"):
 			tmp[index] = sheet.cell(row = r, column = index + 1).value
+			err[index] = tmp[index]
 		if (dataTypes[index] == "email"):
 			if (sheet.cell(row = r, column = index + 1).value):
 				regex = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b')
-				tmp[index] = re.findall(regex, sheet.cell(row = r, column = index + 1).value)
+				addresses = re.findall(regex, sheet.cell(row = r, column = index + 1).value)
+				if (len(addresses)):
+					tmp[index] = addresses
+				else:
+					err[index] = addresses
+					err[len(headers)] = "Indirizzo email non valido."
 	emails = tmp[dataTypes.index("email")]
-	if (hasattr(emails, '__iter__')):
+	if (hasattr(emails, "__iter__")):
 		for email in emails:
 			occourrences = [match for match in inserted if email.lower() in match]
 			if not occourrences:
 				row = [None] * len(headers)
 				for index, column in enumerate(headers):
 					if (dataTypes[index] == "text"):
-						row[index] = tmp[index].strip().capitalize() if tmp[index] else ''
+						row[index] = tmp[index].strip().capitalize() if tmp[index] else ""
 					if (dataTypes[index] == "email"):
 						row[index] = email.lower()
-				writer.writerow(row)
+				exported_writer.writerow(row)
 				inserted.append(email.lower())
+				success = success + 1
+			else:
+				duplicate = duplicate + 1
+	else:
+		err[len(headers)] = "Indirizzo email non presente."
+		errors_writer.writerow(err)
+		errors = errors + 1
 
-file.close()
+exported_file.close()
+errors_file.close()
+
+print("Indirizzi email esportati: " + str(success))
+print("Indirizzi email non validi: " + str(errors))
+print("Indirizzi email duplicati: " + str(duplicate))
